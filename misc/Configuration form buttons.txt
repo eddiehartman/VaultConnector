@@ -1,0 +1,66 @@
+Configuration form buttons
+
+Main (no section title)
+	Vault URL
+	[Test Connection] ¹⁰
+	Authentication Method
+	Role ID
+	Secret ID
+	Secret ID Is Wrapped
+	[Inspect Wrapping Token] ¹¹
+	[Test Login] ¹²
+	Object Type
+	KV Mount				[Select...] ¹³
+
+Startup Checks
+	Health Check
+	Capability Check Path			[Select...] ¹⁴
+	Required Capabilities
+	[Check Permissions] ¹⁵
+
+TLS and Certificate Login
+	Truststore				[Fetch Server Certificate...] ¹⁶
+	...
+
+factor
+
+Laying out button placement and cross-cutting login caveats.
+Yes. A handful of buttons would make the form a lot easier to set up, and two of them can change what’s enabled on the form. I’d add these, each placed next to the field it helps with:
+
+Main (no section title)
+	Vault URL
+	[Test Connection] ¹⁰
+	Authentication Method
+	Role ID
+	Secret ID
+	Secret ID Is Wrapped
+	[Inspect Wrapping Token] ¹¹
+	[Test Login] ¹²
+	Object Type
+	KV Mount				[Select...] ¹³
+
+Startup Checks
+	Health Check
+	Capability Check Path			[Select...] ¹⁴
+	Required Capabilities
+	[Check Permissions] ¹⁵
+
+TLS and Certificate Login
+	Truststore				[Fetch Server Certificate...] ¹⁶
+	...
+Footnotes (continuing the numbering from before)
+
+10. Test Connection calls sys/health, which needs no token, so it works before any credentials are filled in. It reports the server version, cluster name, and whether Vault is sealed, a standby node, or not initialized. It can also affect the form: Enterprise builds report a version ending in +ent. Namespace could stay disabled until a test shows Enterprise, or at least get a hint saying it has no effect on this server.
+11. Inspect Wrapping Token is enabled only when Secret ID Is Wrapped = true. It calls sys/wrapping/lookup, which does not consume the token. It shows the token’s creation path, TTL and expiry, and runs the same tampering check the connector does at startup: the creation path must be AppRole secret-id generation. This lets you verify a wrapped secret ID without burning it.
+12. Test Login logs in with the selected method and runs lookupSelf. It shows the display name, policies, TTL and whether the token is renewable, then revokes the token. It is disabled when Secret ID Is Wrapped = true, because logging in unwraps the single-use token and the real connector run would then fail. That’s the one dependency here that really matters. Use Inspect Wrapping Token in that case.
+13. Select... (KV Mount) lists the KV mounts the token can see and fills a dropdown. sys/internal/ui/mounts is the better choice than sys/mounts, because the default policy allows it, so the connector’s own role doesn’t need extra rights. It should leave out KV v1 mounts, or flag them, since the connector only speaks KV v2. It needs a login, so the same wrapped-token rule as footnote 12 applies.
+14. Select... (Capability Check Path) browses for a sample object of the selected Object Type, much like the LDAP connector’s “Select” for the search base. For kvSecret it lists folders and secrets under KV Mount. For policy, entity and group it lists names. It needs a login, so footnote 12 applies.
+15. Check Permissions goes further than the single startup check. It runs capabilities-self on every path in the capability table at the top of the draft for the selected Object Type, such as sys/auth read for aliases, or the entity and group ID paths for member names. It then reports what is granted and what is missing. It could also fill in Required Capabilities from the connector’s mode: Lookup needs read, AddOnly create, Update read + create + update, and Delete delete. That saves people from guessing. It needs a login, so footnote 12 applies.
+16. Fetch Server Certificate... (optional) shows Vault’s TLS certificate chain and offers to save it into a truststore. It’s helpful with self-signed or internal-CA setups, but it writes a file, so I’d treat it as a nice-to-have.
+Left out on purpose
+
+Auth Mount Path picker: listing sys/auth needs a logged-in token, and logging in needs the correct mount, so it’s chicken-and-egg. If the login works, the mount is already right.
+Namespace picker: sys/namespaces rarely helps, since the namespace usually comes from whoever set up the role.
+Related, but not on this form: attribute discovery in the Input/Output Maps can come from the connector’s querySchema(). It would return the vault.* attributes for the selected Object Type, plus the keys of the sample secret from Capability Check Path.
+
+I haven’t confirmed how a TDI 7.2 form definition wires a button to script in the connector, so I can look that up on madigansolutions.com if you’d like to go that way.

@@ -1,0 +1,52 @@
+Main (no section title)
+	Vault URL				vaultUrl			e.g. https://vault.example.com:8200
+	Authentication Method			authMethod			approle | cert | token	(default approle)
+	Role ID	¹				roleId
+	Secret ID ¹				secretId			secret_id, or wrapping token
+	Secret ID Is Wrapped ¹			secretIdWrapped			true | false	(default false)
+	Object Type				objectType			kvSecret | policy | entity | group	(default kvSecret)
+	KV Mount ²				kvMount				default secret
+
+Authentication Options
+	Auth Mount Path ¹			authMount			empty = same as Authentication Method
+	Token (testing only) ¹			vaultToken
+
+TLS and Certificate Login ³
+	Truststore				tlsTruststore			empty = JVM default truststore
+	Truststore Password ⁴			tlsTruststorePassword
+	Keystore (client certificate) ¹		tlsKeystore			required for cert auth
+	Keystore Password ⁴			tlsKeystorePassword
+	Store Type ⁵				tlsStoreType			PKCS12 | JKS	(default PKCS12)
+	TLS Protocol ⁵				tlsProtocol			TLSv1.2 | TLSv1.3	(default TLSv1.2)
+	Cert Role ¹				certRole			empty = any matching role
+
+Update and Delete Behavior
+	Update Method ⁶				updateMethod			patch | replace	(default patch)
+	Delete Mode ⁶				deleteMode			soft | permanent	(default soft)
+
+Startup Checks
+	Health Check				healthCheck			true | false	(default true)
+	Capability Check Path ⁷			capabilityCheckPath
+	Required Capabilities ⁸			requiredCapabilities		e.g. read,create,update	(default read)
+
+Network and Enterprise
+	Namespace				vaultNamespace			Enterprise/HCP only
+	HTTP Transport				httpTransport			auto | httpClient | urlConnection	(default auto)
+	Timeout (ms) ⁹				timeoutMs			default 10000
+
+Footnotes
+
+1. Authentication Method decides which credential fields are used:
+approle: Role ID, Secret ID, Secret ID Is Wrapped and Auth Mount Path are enabled. Token and Cert Role are disabled.
+cert: Keystore (required), Keystore Password, Cert Role and Auth Mount Path are enabled. Role ID, Secret ID, Secret ID Is Wrapped and Token are disabled. Vault URL must be https.
+token: Only Token is enabled. Role ID, Secret ID, Secret ID Is Wrapped, Cert Role and Auth Mount Path are disabled, because token login never calls an auth mount.
+2. KV Mount is used by the standard modes only when Object Type = kvSecret. Even so, I’d keep it enabled for every Object Type. In CallReply mode, the KV commands (read, write, patch, list, delete, metadataRead, metadataDelete) use it as their default mount whatever Object Type is set to. Change the hint text instead of disabling the field.
+3. The whole TLS section is disabled when Vault URL starts with http://. The stores are only applied to https connections. It is also disabled when HTTP Transport = httpClient, because that transport uses the server-wide JSSE settings and ignores these fields. The combination cert + httpClient can’t work, since the client certificate would never be sent. The draft currently only logs a message for this case, so chooseTransport() should throw instead.
+4. Each password field is enabled only when its store path (Truststore or Keystore) is filled in.
+5. Store Type and TLS Protocol are enabled only when at least one store is filled in. Without a store, no TLS context is built and these values are never read.
+6. These two depend on Object Type:
+Update Method is disabled for policy, because the policy text is always replaced. It applies to kvSecret (the secret keys) and to entity and group (their metadata).
+Delete Mode is enabled only for kvSecret. Deleting a policy, entity or group is always permanent.
+7. Capability Check Path stays enabled, but its meaning follows Object Type. For kvSecret it is a secret path under KV Mount, such as apps/tdi/db. For policy, entity and group it is an object name. The hint text should change with it.
+8. Required Capabilities is enabled only when Capability Check Path is filled in. Without a path, the check is skipped.
+9. Timeout is used only by the urlConnection transport. It is enabled when HTTP Transport = urlConnection, or when it is auto and a store is set, since auto then picks urlConnection. It is disabled when HTTP Transport = httpClient.	
